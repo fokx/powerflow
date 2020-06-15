@@ -1,5 +1,8 @@
 import numpy as np
 
+'''
+including simple functions not limited to Network Class
+'''
 
 def print_inductance_array(Y):
     '''
@@ -54,9 +57,9 @@ def check_network(branches, nodes):
     :param nodes: a list of nodes.
     '''
     # Check 1,
-    # assert all branches's i != its j
+    # assert all branches's i != its j, i.e. not loop for every node
     for branch in branches:
-        assert branch.i != branch.j, "Node {} has a loop to itself".format(i)
+        assert branch.i != branch.j, "Node {} has a loop to itself".format(branch.i)
 
     # Check 2,
     # assert all nodes do have valid data

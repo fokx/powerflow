@@ -1,7 +1,7 @@
 import numpy as np
+from network import Node, Line, Transformer, Network
 
-
-def NR(network,eps,max_num_iter):
+def NR(network, eps=1e-8, max_num_iter=15, show_steps=False):
     '''
     won't consider Y as a sparse matrix
     :param max_num_iter: if iteration times > max_num_iter, return None
@@ -9,59 +9,83 @@ def NR(network,eps,max_num_iter):
 
     :return: (1) node voltage(amplitude and phase angle) array if iteration converges,
              else None
-             # TODO: do not return network
              (2) iteration times taken
     '''
+    global num_iter
     num_PQ_nodes = network.get_num_PQ_nodes()
     num_PV_nodes = network.get_num_PV_nodes()
-    num_Vtheta_nodes = network.get_num_Vtheta_nodes()
-
-    delta_P_array = np.zeros(dtype=np.float, shape=(num_PQ_nodes + num_PV_nodes, 1))
-    delta_Q_array = np.zeros(dtype=np.float, shape=(num_PQ_nodes, 1))
-
-    # to make them live after iteration in all nodes, declare the below two arrays here.
-    fx = np.vstack((delta_P_array, delta_Q_array))
-    dx = np.vstack((delta_P_array, delta_Q_array))
 
     for num_iter in range(max_num_iter):
+
+        fx_stack = []
+        Pix_stack = []
+        Qix_stack = []
+        for node_i in network.PQ_nodes + network.PV_nodes:
+            Pi = 0.0
+            adjacent_nodes = network.get_adjacent_nodes(node_i)
+            for node_j in adjacent_nodes:
+                Gij, Bij = network.get_Gij_Bij(node_i, node_j)
+                thetaij = network.get_thetaij(node_i, node_j)
+                Pi += node_i.V * node_j.V * (Gij * np.cos(thetaij) + Bij * np.sin(thetaij))
+            delta_P = node_i.PG - node_i.PL - Pi
+            fx_stack.append(delta_P)
+            Pix_stack.append(Pi)
+
         for node_i in network.PQ_nodes:
-            Pi = 0.0
             Qi = 0.0
             for node_j in network.get_adjacent_nodes(node_i):
-
                 Gij, Bij = network.get_Gij_Bij(node_i, node_j)
-                assert not (Gij == 0.0 and Bij == 0.0)
                 thetaij = network.get_thetaij(node_i, node_j)
-                Pi += node_i.V * node_j.V * (Gij * np.cos(thetaij) + Bij * np.sin(thetaij))
                 Qi += node_i.V * node_j.V * (Gij * np.sin(thetaij) - Bij * np.cos(thetaij))
-            delta_P = node_i.PG - node_i.PL - Pi
             delta_Q = node_i.QG - node_i.QL - Qi
+            fx_stack.append(delta_Q)
 
-            # TODO: MAKE SURE REALLY UNDERSTAND INDEX
-            # print(node_i.index)
-            delta_P_array[node_i.index] = delta_P
-            delta_Q_array[node_i.index] = delta_Q
-
-        for node_i in network.PV_nodes:
-            Pi = 0.0
+        for node_i in network.PQ_nodes + network.PV_nodes:
             Qi = 0.0
             for node_j in network.get_adjacent_nodes(node_i):
                 Gij, Bij = network.get_Gij_Bij(node_i, node_j)
                 thetaij = network.get_thetaij(node_i, node_j)
-                Pi += node_i.V * node_j.V * (Gij * np.cos(thetaij) + Bij * np.sin(thetaij))
-            delta_P = node_i.PG - node_i.PL - Pi
+                Qi += node_i.V * node_j.V * (Gij * np.sin(thetaij) - Bij * np.cos(thetaij))
+            Qix_stack.append(Qi)
+        abs_fx_max = np.max(np.abs(fx_stack))
+        if abs_fx_max <= eps:
+            if show_steps:
+                print("Calculation converges in required number of iteration({} < {}).".
+                      format(num_iter, max_num_iter))
 
-            # TODO: MAKE SURE REALLY UNDERSTAND INDEX
-            # print(node_i.index)
-            delta_P_array[node_i.index] = delta_P
+            # calculate S of Vtheta nodes and Q of PV nodes
+            Vtheta_node: Node
+            for Vtheta_node in network.Vtheta_nodes:
+                P = 0.
+                Q = 0.
+                for node in network.all_nodes:
+                    Gij, Bij = network.get_Gij_Bij(Vtheta_node, node)
+                    thetaij = network.get_thetaij(Vtheta_node, node)
+                    Q += Vtheta_node.V * node.V * (Gij * np.sin(thetaij) - Bij * np.cos(thetaij))
+                    P += Vtheta_node.V * node.V * (Gij * np.cos(thetaij) + Bij * np.sin(thetaij))
+                Vtheta_node.S = P + 1j * Q
+                network.update_node(Vtheta_node)
 
-        fx = np.vstack((delta_P_array, delta_Q_array))
+            PV_node: Node
+            for PV_node in network.PV_nodes:
+                P = 0.
+                Q = 0.
+                for node in network.all_nodes:
+                    Gij, Bij = network.get_Gij_Bij(PV_node, node)
+                    thetaij = network.get_thetaij(PV_node, node)
+                    Q += PV_node.V * node.V * (Gij * np.sin(thetaij) - Bij * np.cos(thetaij))
+                PV_node.Q = Q
+                network.update_node(PV_node)
 
-        if np.max(fx) <= eps:
-            # TODO: REVERT
-            # return network, num_iter
-            exit(0)
+            # return the updated network and number of iterations
+            return network, num_iter + 1  # beacause num_iter starts from 0, add 1 to `num_iter`
+
         else:
+            if show_steps:
+                print("***************Starting num_iter: {}**********************".format(num_iter))
+                print("delta P and delta Q array:")
+                print("{}".format(fx_stack))
+                print("max time after abs: {}".format(abs_fx_max))
             # calculate Jacobian matrix J
             J = np.zeros(dtype=float, shape=(num_PQ_nodes + num_PV_nodes + num_PQ_nodes,
                                              num_PQ_nodes + num_PV_nodes + num_PQ_nodes))
@@ -78,7 +102,7 @@ def NR(network,eps,max_num_iter):
                     Gij, Bij = network.get_Gij_Bij(node_i, node_j)
                     thetaij = network.get_thetaij(node_i, node_j)
                     if i == j:
-                        J[i, j] = node_i.V ** 2 * Bij + node_i.QG - node_i.QL
+                        J[i, j] = node_i.V ** 2 * Bij + Qix_stack[i]
                     else:
                         J[i, j] = - node_i.V * node_j.V * (Gij * np.sin(thetaij) - Bij * np.cos(thetaij))
                 # N
@@ -86,10 +110,10 @@ def NR(network,eps,max_num_iter):
                     node_j = network.get_node(j - (num_PQ_nodes + num_PV_nodes))
                     Gij, Bij = network.get_Gij_Bij(node_i, node_j)
                     thetaij = network.get_thetaij(node_i, node_j)
-                    if i - (num_PQ_nodes + num_PV_nodes) == j:
-                        J[i, j] = - node_i.V ** 2 * Gij - node_i.PG + node_i.PL
+                    if i + (num_PQ_nodes + num_PV_nodes) == j:
+                        J[i, j] = - node_i.V ** 2 * Gij - Pix_stack[i]
                     else:
-                        J[i, j] = - node_i.V * node_j.V * (Gij * np.cos(thetaij) - Bij * np.sin(thetaij))
+                        J[i, j] = - node_i.V * node_j.V * (Gij * np.cos(thetaij) + Bij * np.sin(thetaij))
 
             for i in range(num_PQ_nodes + num_PV_nodes, num_PQ_nodes + num_PV_nodes + num_PQ_nodes):
                 # M
@@ -98,8 +122,8 @@ def NR(network,eps,max_num_iter):
                     node_j = network.get_node(j)
                     Gij, Bij = network.get_Gij_Bij(node_i, node_j)
                     thetaij = network.get_thetaij(node_i, node_j)
-                    if i == j - num_PQ_nodes + num_PV_nodes:
-                        J[i, j] = node_i.V ** 2 * Gij - node_i.PG + node_i.PL
+                    if i == j + num_PQ_nodes + num_PV_nodes:
+                        J[i, j] = node_i.V ** 2 * Gij - Pix_stack[j]
                     else:
                         J[i, j] = node_i.V * node_j.V * (Gij * np.cos(thetaij) + Bij * np.sin(thetaij))
                 # L
@@ -108,29 +132,39 @@ def NR(network,eps,max_num_iter):
                     Gij, Bij = network.get_Gij_Bij(node_i, node_j)
                     thetaij = network.get_thetaij(node_i, node_j)
                     if i == j:
-                        J[i, j] = node_i.V ** 2 * Bij - node_i.QG + node_i.QL
+                        J[i, j] = node_i.V ** 2 * Bij - Qix_stack[i - (num_PQ_nodes + num_PV_nodes)]
                     else:
                         J[i, j] = - node_i.V * node_j.V * (Gij * np.sin(thetaij) - Bij * np.cos(thetaij))
+            if show_steps:
+                print("-" * 10)
+                print("J")
+                print(J)
 
             # update network parameters
             inv_J = np.linalg.inv(J)
-            dx = np.matmul(inv_J, fx)
-
+            fx = np.reshape(fx_stack, (len(fx_stack), 1))
+            dx = -np.matmul(inv_J, fx)
             d_theta = dx[:num_PQ_nodes + num_PV_nodes]
             dV_over_V = dx[num_PQ_nodes + num_PV_nodes:]
-
-            # TODO: assert out of possible misunderstanding of numpy grammar. need to be removed
-            assert len(d_theta) == num_PQ_nodes + num_PV_nodes
-            assert len(dV_over_V) == num_PQ_nodes
-
+            if show_steps:
+                print("-" * 10)
+                print("dx")
+                print(dx)
             for node in network.PQ_nodes:
-                # TODO: try += on object's attributes
-                node.theta = node.theta + d_theta[node.index]
-                node.V = node.V + dV_over_V[node.index]
+                node.theta += d_theta[node.index]
+                node.V += node.V * dV_over_V[node.index]
                 network.update_node(node)
             for node in network.PV_nodes:
-                node.theta = node.theta + d_theta[node.index]
+                node.theta += d_theta[node.index]
                 network.update_node(node)
+            if show_steps:
+                print("-" * 10)
+                print("after num_iter: {}".format(num_iter))
+                print("V")
+                print([node.V for node in network.all_nodes])
+                print("theta(degrees)")
+                print([node.theta * 180 / np.pi for node in network.all_nodes])
+                print("\n")
 
-    # if iteration times > max_num_iter, return None(means power flow calculation divergence)
-    # return None, max_num_iter
+    # return None if the power flow calculation diverges
+    return None, num_iter + 1

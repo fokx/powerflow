@@ -48,6 +48,9 @@ class Node:
         self.QL = float(QL)
         self.V0 = float(V0)  # init value
 
+        self.S = complex(0)  # only used when this is a Vtheta node
+        self.Q = complex(0)  # only used when this is a PV node
+
         self.theta0 = theta0  # init value
         self.V = self.V0
         self.theta = self.theta0
@@ -115,7 +118,7 @@ class Node:
 
 
 class Network():
-    # TODO: implement Network graph (power flow graph)
+    # TODO: implement Network graph (power flow graph) in visulize() method
     '''
      :param list_of_nodes: list of Node(index, node_type, PG, QG, PL, QL, V0,
                                PGmin, PGmax, QGmin, QGmax, Vmin, Vmax)
@@ -163,7 +166,6 @@ class Network():
         return self.all_nodes[index]
 
     def get_node_using_raw_index(self, index):
-        # TODO maybe useless
         assert index >= 0
         assert index < self.num_all_nodes, "{}, {}".format(index, self.num_all_nodes)
         return self.all_nodes[index]
@@ -187,7 +189,6 @@ class Network():
         list_row_i = list(self.Y[node_i.index, :])
         for j, Yij in enumerate(list_row_i):
             if Yij != 0.0:
-                # TODO: MAKE SURE REALLY UNDERSTAND INDEX
                 # assert j<len(self.all_nodes), "{} > {} of {}".format(j, len(self.all_nodes), Yij)
                 adjacent_nodes.append(self.get_node(j))
 
@@ -209,6 +210,40 @@ class Network():
         assert node.index >= 0
         assert node.index < self.num_all_nodes, "{}, {}".format(node.index, self.num_all_nodes)
         self.all_nodes[node.index] = node
+
+    def update_node_i_PG(self, index, PG):
+        assert index >= 0
+        assert index < self.num_all_nodes, "{}, {}".format(index, self.num_all_nodes)
+        node_i: Node = self.get_node(index)
+        node_i.PG = PG
+        self.update_node(node_i)
+
+    def update_node_i_V(self, index, V):
+        assert index >= 0
+        assert index < self.num_all_nodes, "{}, {}".format(index, self.num_all_nodes)
+        node_i: Node = self.get_node(index)
+        node_i.V = V
+        self.update_node(node_i)
+
+    def visualize(self):
+        pass
+
+    def statistics(self):
+
+        network_loss = 0.
+        node: Node
+        for node in self.all_nodes:
+            if node.node_type == NodeType.Vtheta:
+                network_loss += np.real(node.S)
+            else:
+                network_loss += node.PG - node.PL
+
+        all_V = [node.V for node in self.all_nodes]
+        max_V_index = np.argmax(all_V)
+        max_V = all_V[max_V_index]
+        min_V_index = np.argmin(all_V)
+        min_V = all_V[min_V_index]
+        return network_loss, (max_V_index, max_V), (min_V_index, min_V)
 
 
 class Branch:
@@ -265,11 +300,11 @@ class Transformer(Branch):
 
     @classmethod
     def from_str(cls, line):
-        if len(line) !=0:
+        if len(line) != 0:
             # % Trans_para = [始端节点号 末端节点号  电阻   电抗  非标准变比]
             line = line.strip().split()
             line = [i.strip() for i in line]
-            assert len(line) == 5, "{} with length {}".format(len(line),line)
+            assert len(line) == 5, "{} with length {}".format(len(line), line)
             return Transformer(line[0], line[1], line[2], line[3], line[4])
         else:
             # TODO: HANDLE None better
