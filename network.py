@@ -128,7 +128,7 @@ class Network():
         self.PQ_nodes = []
         self.PV_nodes = []
         self.Vtheta_nodes = []
-        self.Y = Y[1:, 1:]
+        self.Y = Y
 
         # arrangelsit of nodes in correct order: PQ...PV...Vtheta
 
@@ -227,7 +227,10 @@ class Branch:
         self.G2 = np.real(Y2)
         self.B2 = np.imag(Y2)
         self.Z = R + 1j * X
-        self.Y = 1 / self.Z
+        if self.Z != 0:
+            self.Y = 1 / self.Z
+        else:
+            self.Y = np.inf
 
 
 class Line(Branch):
@@ -262,8 +265,12 @@ class Transformer(Branch):
 
     @classmethod
     def from_str(cls, line):
-        # % Trans_para = [始端节点号 末端节点号  电阻   电抗  非标准变比]
-        line = line.strip().split()
-        line = [i.strip() for i in line]
-        assert len(line) == 5
-        return Transformer(line[0], line[1], line[2], line[3], line[4])
+        if len(line) !=0:
+            # % Trans_para = [始端节点号 末端节点号  电阻   电抗  非标准变比]
+            line = line.strip().split()
+            line = [i.strip() for i in line]
+            assert len(line) == 5, "{} with length {}".format(len(line),line)
+            return Transformer(line[0], line[1], line[2], line[3], line[4])
+        else:
+            # TODO: HANDLE None better
+            return None
