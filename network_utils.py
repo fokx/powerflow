@@ -42,7 +42,7 @@ def form_inductance_array(branches):
 
         Y[i, j] += -branch.Y
         Y[j, i] += -branch.Y
-
+    Y = Y[1:, 1:]
     return Y
 
 
