@@ -125,6 +125,12 @@ transformers3= '''
 '''
 extra_branches3 = [(2, 0.05j)]
 
+# from 《电力系统稳态分析》上机实验二：
+# 补充程序形成导纳矩阵并手调最优潮流
 parameter_set1 = (nodes1, lines1, transformers1, None)
+
+# from Page 103, example 4-3
 parameter_set2 = (nodes2, lines2, transformers2, None)
+
+# From Page 111, example 4-5
 parameter_set3 = (nodes3, lines3, transformers3, extra_branches3)

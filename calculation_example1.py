@@ -4,7 +4,7 @@ from newton_raphson import NR
 from fast_decoupled import FDPF
 # Step1, define network parameters(lines and transformers)
 # Here we use our example parameter set
-from examples_example_input import parameter_set1 as parameter_set
+from examples_example_input import parameter_set2 as parameter_set
 
 nodes, lines, transformers, extra_branches = parameter_set
 
@@ -33,11 +33,12 @@ print("Inductance Array after node re-index:\n{}\n".format(network.Y))
 # Step 3, calculate using N-R method
 # All initial values are passed by `network`,
 # you can modify it using network.update_node() or update_node_i_PG() or update_node_i_V() method
-eps = 1e-7  # epsilon
+eps = 1e-5  # epsilon
 max_num_iter = 15
+
 # To see iteration process, set `show_steps` to True, default: False
-# network, num_iter = NR(network, eps, max_num_iter, show_steps=True)
-network, num_iter = FDPF(network, eps, max_num_iter, show_steps=True)
+network, num_iter = NR(network, eps, max_num_iter, show_steps=True)
+# network, num_iter = FDPF(network, eps, max_num_iter, show_steps=True)
 if network is not None:  # if calculation diverges
     network_loss, (max_V_index, max_V), (min_V_index, min_V) = network.statistics()
     print("Network loss: {}".format(network_loss))

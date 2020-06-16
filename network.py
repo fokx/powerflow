@@ -479,9 +479,9 @@ class Network():
                 # width=2
                 )
 
-        # plt.show()
+        plt.show()
         # or
-        plt.savefig("network_voltage_distribution.png")
+        # plt.savefig("network_voltage_distribution.png")
 
 
 class Branch:
