@@ -1,6 +1,7 @@
 from enum import Enum
 import copy
 import numpy as np
+import unittest
 
 
 class ValueRange:
@@ -179,7 +180,12 @@ class Network():
         self.num_Vtheta_nodes = len(self.Vtheta_nodes)
 
         # old <-> current index map
-        assert self.all_nodes == list_of_nodes
+        # if Vtheta node is put at last initially, both order and elements are equal
+        # otherwise, only elements equal
+        for node in self.all_nodes:
+            assert node in list_of_nodes
+        assert len(self.all_nodes) == len(list_of_nodes)
+
         list_of_raw_index = [node.raw_index for node in self.all_nodes]
         list_of_current_index = [node.index for node in self.all_nodes]
 
@@ -209,7 +215,8 @@ class Network():
                 for extra_branch in extra_branches:
                     extra_branch = (self.raw_to_current_index_map[extra_branch[0]], extra_branch[1])
                     self.extra_branches.append(extra_branch)
-
+        else:
+            self.extra_branches = None
         self.Y = self._form_inductance_array(self.branches, self.extra_branches)
 
     def get_node(self, index):
@@ -324,7 +331,7 @@ class Network():
 
         return Y
 
-    def form_B_prime_array(self,ignore_transformer_k=True):
+    def form_B_prime_array(self, ignore_transformer_k=True):
         '''
         used to generate B' used in Fast Decoupled Power Flow
         :param ignore_transformer_k: use X_T instead of k_T * X_T
@@ -358,7 +365,6 @@ class Network():
                 B_prime[j, i] -= 1 / branch.X
                 B_prime[i, i] += 1 / branch.X
                 B_prime[j, j] += 1 / branch.X
-
 
         return B_prime[:self.num_PQ_nodes + self.num_PV_nodes,
                :self.num_PQ_nodes + self.num_PV_nodes]

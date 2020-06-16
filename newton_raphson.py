@@ -55,7 +55,7 @@ def NR(network, eps=1e-8, max_num_iter=15, show_steps=False):
         if show_steps:
             print("delta P and delta Q array: before interation {}: ".format(num_iter + 1))
             print("{}".format(fx_stack))
-            print("max time after abs: {}".format(abs_fx_max))
+            print("max delta of abs deltaP & deltaQ: {}".format(abs_fx_max))
 
         if abs_fx_max <= eps:
             if show_steps:
