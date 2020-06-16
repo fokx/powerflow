@@ -1,7 +1,13 @@
 from enum import Enum
 import copy
+
+import matplotlib
 import numpy as np
 import unittest
+
+import networkx as nx
+import matplotlib.pyplot as plt
+import matplotlib as mpl
 
 
 class ValueRange:
@@ -276,9 +282,6 @@ class Network():
         node_i.V = V
         self.update_node(node_i)
 
-    def visualize(self):
-        pass
-
     def statistics(self):
 
         network_loss = 0.
@@ -368,6 +371,58 @@ class Network():
 
         return B_prime[:self.num_PQ_nodes + self.num_PV_nodes,
                :self.num_PQ_nodes + self.num_PV_nodes]
+
+    def visualize(self):
+        G = nx.Graph()
+        edges_only_PQ = []
+        edges_with_other_types = []
+        node_type_to_expr = {NodeType.Vtheta: "Vθ",
+                             NodeType.PQ: "PQ",
+                             NodeType.PV: "PV"}
+        node: Node
+        for node in self.all_nodes:
+            if node.node_type == NodeType.PQ:
+                node_i_attr = "Node{}({}), {:.4f}p.u.".format(node.index, node_type_to_expr[node.node_type], node.V)
+                node_j: Node
+                for node_j in self.get_adjacent_nodes(node):
+                    if node_j.node_type == NodeType.PQ:
+                        node_j_attr = "Node{}({}), {:.4f}p.u.".format(node_j.index, node_type_to_expr[node_j.node_type],
+                                                                      node_j.V)
+                        edges_only_PQ.append((node_i_attr, node_j_attr))
+            else:
+                node_i_attr = "Node{}({}), {:.4f}p.u.".format(node.index, node_type_to_expr[node.node_type], node.V)
+                node_j: Node
+                for node_j in self.get_adjacent_nodes(node):
+                    node_j_attr = "Node{}({}), {:.4f}p.u.".format(node_j.index, node_type_to_expr[node_j.node_type],
+                                                                  node_j.V)
+                    edges_with_other_types.append((node_i_attr, node_j_attr))
+        G.add_edges_from(edges_only_PQ)
+        #
+        G_PQ_nodes_set = set(G.nodes())
+        color_lookup = {v: k for k, v in enumerate(sorted(set(G.nodes())))}
+        color_lookup_range_list = color_lookup.keys()
+        color_lookup_range_list = [float(color_lookup_range.split(",")[1].strip().split("p.u.")[0]) for
+                                   color_lookup_range in color_lookup_range_list]
+        low, *_, high = sorted(color_lookup_range_list)
+        norm = mpl.colors.Normalize(vmin=low, vmax=high, clip=True)
+        mapper = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.coolwarm)
+        node_colors_map = [mapper.to_rgba(color_lookup_range_list[i])
+                           for i in color_lookup.values()]
+
+        G.add_edges_from(edges_with_other_types)
+        G_nodes_set = set(G.nodes())
+
+        color_lookup.update({v : k + len(color_lookup) for k, v in enumerate(sorted(G_nodes_set - G_PQ_nodes_set))})
+
+
+        node_colors_map += [(0, 0, 0, 0.5)] * (len(G.nodes) - len(node_colors_map))
+        # mpl.rcParams['figure.figsize'] = 12, 7
+        nx.draw(G,
+                nodelist=color_lookup,
+                node_size=100,
+                node_color=node_colors_map,
+                with_labels=True)
+        plt.show()
 
 
 class Branch:
