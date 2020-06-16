@@ -7,6 +7,7 @@ A Power Flow Calculation Project,
 $ python calculation_example1.py
 ```
 ### using example parameter set 1, visualized result
+(color temperature represents level of voltage.)
 ![Voltage distribution](network_voltage_distribution.png?raw=true "Title")
 
 ### using example parameter set 2 with N-R method
