@@ -10,9 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 
 import os
-
 proxy = ''
-
 os.environ['http_proxy'] = proxy
 os.environ['HTTP_PROXY'] = proxy
 os.environ['https_proxy'] = proxy
@@ -481,7 +479,9 @@ class Network():
                 # width=2
                 )
 
-        plt.show()
+        # plt.show()
+        # or
+        plt.savefig("network_voltage_distribution.png")
 
 
 class Branch:
