@@ -179,7 +179,7 @@ class Network():
         self.num_Vtheta_nodes = len(self.Vtheta_nodes)
 
         # old <-> current index map
-        assert  self.all_nodes==list_of_nodes
+        assert self.all_nodes == list_of_nodes
         list_of_raw_index = [node.raw_index for node in self.all_nodes]
         list_of_current_index = [node.index for node in self.all_nodes]
 
@@ -210,7 +210,7 @@ class Network():
                     extra_branch = (self.raw_to_current_index_map[extra_branch[0]], extra_branch[1])
                     self.extra_branches.append(extra_branch)
 
-        self.Y = self.form_inductance_array(self.branches, self.extra_branches)
+        self.Y = self._form_inductance_array(self.branches, self.extra_branches)
 
     def get_node(self, index):
         # BE ATTENTION ABOUT `update_node`'s index
@@ -289,10 +289,11 @@ class Network():
         min_V = all_V[min_V_index]
         return network_loss, (max_V_index, max_V), (min_V_index, min_V)
 
-    def form_inductance_array(self, branches, extra_branches):
+    def _form_inductance_array(self, branches, extra_branches):
         '''
+        :param extra_branches: list of tuple: (node_index, inductance_to_the_ground)
         :param branches: a list branches. All bracnches,
-            including nodes and transformers
+            including lines and transformers
         :return: inductance matrix
         '''
         branch_index_i = [branch.i for branch in branches]
@@ -323,6 +324,45 @@ class Network():
 
         return Y
 
+    def form_B_prime_array(self,ignore_transformer_k=True):
+        '''
+        used to generate B' used in Fast Decoupled Power Flow
+        :param ignore_transformer_k: use X_T instead of k_T * X_T
+        :param branches: a list branches. All bracnches,
+            including lines and transformers
+        :return: B' matrix
+        '''
+        B_prime = np.zeros(dtype=np.float, shape=(self.num_all_nodes, self.num_all_nodes))
+
+        if ignore_transformer_k:
+            branch: Branch
+            for branch in self.branches:
+                i = branch.i
+                j = branch.j
+                if isinstance(branch, Line):
+                    B_prime[i, j] -= 1 / branch.X
+                    B_prime[j, i] -= 1 / branch.X
+                    B_prime[i, i] += 1 / branch.X
+                    B_prime[j, j] += 1 / branch.X
+                elif isinstance(branch, Transformer):
+                    B_prime[i, j] -= 1 / branch.X_T
+                    B_prime[j, i] -= 1 / branch.X_T
+                    B_prime[i, i] += 1 / branch.X_T
+                    B_prime[j, j] += 1 / branch.X_T
+        else:
+            branch: Branch
+            for branch in self.branches:
+                i = branch.i
+                j = branch.j
+                B_prime[i, j] -= 1 / branch.X
+                B_prime[j, i] -= 1 / branch.X
+                B_prime[i, i] += 1 / branch.X
+                B_prime[j, j] += 1 / branch.X
+
+
+        return B_prime[:self.num_PQ_nodes + self.num_PV_nodes,
+               :self.num_PQ_nodes + self.num_PV_nodes]
+
 
 class Branch:
     # sub-class: Line, Transformer
@@ -345,15 +385,16 @@ class Branch:
         else:
             self.Y = np.inf
 
+
 class Line(Branch):
     def __init__(self, i, j, R, X, half_Y):
         # % Line_para = [始端节点号 末端节点号  电阻   电抗  对地导纳的一半]
-        i = int(i)
-        j = int(j)
-        R = float(R)
-        X = float(X)
-        half_Y = 1j * float(half_Y)
-        super().__init__(i, j, R, X, half_Y, half_Y)
+        self.i = int(i)
+        self.j = int(j)
+        self.R = float(R)
+        self.X = float(X)
+        self.half_Y = 1j * float(half_Y)
+        super().__init__(self.i, self.j, self.R, self.X, self.half_Y, self.half_Y)
 
     @classmethod
     def from_str(cls, line):
@@ -365,15 +406,17 @@ class Line(Branch):
 
 
 class Transformer(Branch):
-    def __init__(self, i, j, R, X, k):
+    def __init__(self, i, j, R_T, X_T, k_T):
         # % Trans_para = [始端节点号 末端节点号  电阻   电抗  非标准变比]
-        i = int(i)
-        j = int(j)
-        R = float(R)
-        X = float(X)
-        k = float(k)
-        Z_T = R + 1j * X
-        super().__init__(i, j, k * R, k * X, (k - 1) / (k * Z_T), (1 - k) / (k ** 2 * Z_T))
+        self.i = int(i)
+        self.j = int(j)
+        self.R_T = float(R_T)
+        self.X_T = float(X_T)
+        self.k_T = float(k_T)
+        self.Z_T = self.R_T + 1j * self.X_T
+        super().__init__(self.i, self.j, self.k_T * self.R_T, self.k_T * self.X_T,
+                         (self.k_T - 1) / (self.k_T * self.Z_T),
+                         (1 - self.k_T) / (self.k_T ** 2 * self.Z_T))
 
     @classmethod
     def from_str(cls, line):
