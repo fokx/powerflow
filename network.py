@@ -1,5 +1,5 @@
 from enum import Enum
-
+import copy
 import numpy as np
 
 
@@ -126,29 +126,45 @@ class Network():
               calculated by 'form_inductance_array'
     '''
 
-    def __init__(self, list_of_nodes, Y):
+    def __init__(self, list_of_nodes, branches, extra_branches=None):
+        '''
+
+        :param list_of_nodes: [Node]
+        :param branches: [Branch]
+        :param extra_branches: [(node_index, inductance)]
+        '''
         self.all_nodes = []
-        self.PQ_nodes = []
-        self.PV_nodes = []
-        self.Vtheta_nodes = []
-        self.Y = Y
 
-        # arrangelsit of nodes in correct order: PQ...PV...Vtheta
+        # rearrange list of nodes in correct order: PQ...PV...Vtheta
 
-        list_of_nodes_without_Vtheta = [node for node in list_of_nodes
-                                        if node.node_type != NodeType.Vtheta]
-        list_of_nodes_without_Vtheta = sorted(list_of_nodes_without_Vtheta, key=lambda node: node.index)
-        for new_index, node in enumerate(list_of_nodes_without_Vtheta):
+        list_of_PQ_nodes = [node for node in list_of_nodes
+                            if node.node_type == NodeType.PQ]
+        list_of_PQ_nodes = sorted(list_of_PQ_nodes, key=lambda node: node.index)
+        for new_index, node in enumerate(list_of_PQ_nodes):
+            # Actually this writes to the instance of Node, thus `list_of_nodes` itself is changed!
+            # so, to generate old_to_current_index_map, it is the same to use either `list_of_nodes` or `self.all_nodes`
+            # see the assert statement below
             node.index = new_index
             self.all_nodes.append(node)
 
+        list_of_PV_nodes = [node for node in list_of_nodes
+                            if node.node_type == NodeType.PV]
+        list_of_PV_nodes = sorted(list_of_PV_nodes, key=lambda node: node.index)
+        for new_index, node in enumerate(list_of_PV_nodes):
+            node.index = new_index + len(list_of_PQ_nodes)
+            self.all_nodes.append(node)
+
+        # write to attributes
         list_of_Vtheta_nodes = [node for node in list_of_nodes
                                 if node.node_type == NodeType.Vtheta]
 
         for new_index, node in enumerate(list_of_Vtheta_nodes):
-            node.index = new_index + len(list_of_nodes_without_Vtheta)
+            node.index = new_index + len(list_of_PQ_nodes) + len(list_of_PV_nodes)
             self.all_nodes.append(node)
 
+        self.PQ_nodes = []
+        self.PV_nodes = []
+        self.Vtheta_nodes = []
         for node in self.all_nodes:
             if node.node_type == NodeType.PQ:
                 self.PQ_nodes.append(node)
@@ -158,6 +174,43 @@ class Network():
                 self.Vtheta_nodes.append(node)
 
         self.num_all_nodes = len(self.all_nodes)
+        self.num_PQ_nodes = len(self.PQ_nodes)
+        self.num_PV_nodes = len(self.PV_nodes)
+        self.num_Vtheta_nodes = len(self.Vtheta_nodes)
+
+        # old <-> current index map
+        assert  self.all_nodes==list_of_nodes
+        list_of_raw_index = [node.raw_index for node in self.all_nodes]
+        list_of_current_index = [node.index for node in self.all_nodes]
+
+        self.raw_to_current_index_map = dict(zip(list_of_raw_index, list_of_current_index))
+        self.current_to_raw_index_map = dict(zip(list_of_current_index, list_of_raw_index))
+
+        # re-index branches and extra_branches
+        self.branches = []
+        branch: Branch
+        for branch in branches:
+            # deep copy is not needed
+            # branch_copy = copy.deepcopy(branch)
+            # branch_copy.i = self.raw_to_current_index_map[branch.i]
+            # branch_copy.j = self.raw_to_current_index_map[branch.j]
+
+            branch.i = self.raw_to_current_index_map[branch.i]
+            branch.j = self.raw_to_current_index_map[branch.j]
+
+            # assert branch.i == branch_copy.i
+            # assert branch.j == branch_copy.j
+
+            self.branches.append(branch)
+
+        if extra_branches is not None:
+            if len(extra_branches) != 0:
+                self.extra_branches = []
+                for extra_branch in extra_branches:
+                    extra_branch = (self.raw_to_current_index_map[extra_branch[0]], extra_branch[1])
+                    self.extra_branches.append(extra_branch)
+
+        self.Y = self.form_inductance_array(self.branches, self.extra_branches)
 
     def get_node(self, index):
         # BE ATTENTION ABOUT `update_node`'s index
@@ -169,15 +222,6 @@ class Network():
         assert index >= 0
         assert index < self.num_all_nodes, "{}, {}".format(index, self.num_all_nodes)
         return self.all_nodes[index]
-
-    def get_num_PQ_nodes(self):
-        return len(self.PQ_nodes)
-
-    def get_num_PV_nodes(self):
-        return len(self.PV_nodes)
-
-    def get_num_Vtheta_nodes(self):
-        return len(self.Vtheta_nodes)
 
     def get_adjacent_nodes(self, node_i: Node):
         '''
@@ -245,6 +289,40 @@ class Network():
         min_V = all_V[min_V_index]
         return network_loss, (max_V_index, max_V), (min_V_index, min_V)
 
+    def form_inductance_array(self, branches, extra_branches):
+        '''
+        :param branches: a list branches. All bracnches,
+            including nodes and transformers
+        :return: inductance matrix
+        '''
+        branch_index_i = [branch.i for branch in branches]
+        branch_index_j = [branch.j for branch in branches]
+        all_node_index = set(branch_index_i + branch_index_j)
+        node_num = len(all_node_index)
+
+        Y = np.zeros(dtype=np.complex, shape=(node_num, node_num))
+
+        for branch in branches:
+            # Y1 is connected to node i
+            # Y2 is connected to node j
+            # self.Z = R + 1j * X
+            # self.Y = 1 / self.Z
+            i = branch.i
+            j = branch.j
+
+            Y[i, i] += branch.Y1 + branch.Y
+            Y[j, j] += branch.Y2 + branch.Y
+
+            Y[i, j] += -branch.Y
+            Y[j, i] += -branch.Y
+
+        if extra_branches is not None:
+            if len(extra_branches) != 0:
+                for extra_branch in extra_branches:
+                    Y[extra_branch[0], extra_branch[0]] += extra_branch[1]
+
+        return Y
+
 
 class Branch:
     # sub-class: Line, Transformer
@@ -266,7 +344,6 @@ class Branch:
             self.Y = 1 / self.Z
         else:
             self.Y = np.inf
-
 
 class Line(Branch):
     def __init__(self, i, j, R, X, half_Y):

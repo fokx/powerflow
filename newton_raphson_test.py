@@ -1,8 +1,12 @@
 import numpy as np
 
+'''
+This file still works, but not kept up-to-date with `newton_raphson.py`
+'''
+
 # TODO : DELETE START
-from examples_example_input import parameter_set1
-nodes,lines,transformers = parameter_set1
+from examples_example_input import parameter_set2
+nodes,lines,transformers = parameter_set2
 from network import Node, Line, Transformer, Network
 from network_utils import check_network, form_inductance_array, print_inductance_array
 
@@ -154,18 +158,18 @@ for num_iter in range(max_num_iter):
 
         for node in network.PQ_nodes:
             # TODO: try += on object's attributes
-            node.theta = node.theta + d_theta[node.index]
-            node.V = node.V + node.V * dV_over_V[node.index]
+            node.theta +=  d_theta[node.index]
+            node.V += node.V * dV_over_V[node.index]
             network.update_node(node)
         for node in network.PV_nodes:
-            node.theta = node.theta + d_theta[node.index]
+            node.theta += d_theta[node.index]
             network.update_node(node)
 
         print("after num_iter: {}".format(num_iter))
         print("V")
         print([node.V for node in network.all_nodes])
-        print("theta")
-        print([node.theta for node in network.all_nodes])
+        print("theta(degrees)")
+        print([node.theta*180/np.pi for node in network.all_nodes])
         print("\n")
 # if iteration times > max_num_iter, return None(means power flow calculation divergence)
 # return None, max_num_iter

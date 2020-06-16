@@ -1,6 +1,7 @@
 import numpy as np
 from network import Node, Line, Transformer, Network
 
+
 def NR(network, eps=1e-8, max_num_iter=15, show_steps=False):
     '''
     won't consider Y as a sparse matrix
@@ -11,9 +12,11 @@ def NR(network, eps=1e-8, max_num_iter=15, show_steps=False):
              else None
              (2) iteration times taken
     '''
+    if show_steps:
+        print("\nStarting N-R calculation\n")
     global num_iter
-    num_PQ_nodes = network.get_num_PQ_nodes()
-    num_PV_nodes = network.get_num_PV_nodes()
+    num_PQ_nodes = network.num_PQ_nodes
+    num_PV_nodes = network.num_PV_nodes
 
     for num_iter in range(max_num_iter):
 
@@ -48,10 +51,16 @@ def NR(network, eps=1e-8, max_num_iter=15, show_steps=False):
                 Qi += node_i.V * node_j.V * (Gij * np.sin(thetaij) - Bij * np.cos(thetaij))
             Qix_stack.append(Qi)
         abs_fx_max = np.max(np.abs(fx_stack))
+
+        if show_steps:
+            print("delta P and delta Q array: before interation {}: ".format(num_iter + 1))
+            print("{}".format(fx_stack))
+            print("max time after abs: {}".format(abs_fx_max))
+
         if abs_fx_max <= eps:
             if show_steps:
-                print("Calculation converges in required number of iteration({} < {}).".
-                      format(num_iter, max_num_iter))
+                print("\nCalculation converges in required number of iterations({} < {}).\n".
+                      format(num_iter+1, max_num_iter))
 
             # calculate S of Vtheta nodes and Q of PV nodes
             Vtheta_node: Node
@@ -82,10 +91,8 @@ def NR(network, eps=1e-8, max_num_iter=15, show_steps=False):
 
         else:
             if show_steps:
-                print("***************Starting num_iter: {}**********************".format(num_iter))
-                print("delta P and delta Q array:")
-                print("{}".format(fx_stack))
-                print("max time after abs: {}".format(abs_fx_max))
+                print("***************Starting iteration {}**********************".format(num_iter + 1))
+
             # calculate Jacobian matrix J
             J = np.zeros(dtype=float, shape=(num_PQ_nodes + num_PV_nodes + num_PQ_nodes,
                                              num_PQ_nodes + num_PV_nodes + num_PQ_nodes))
@@ -151,18 +158,22 @@ def NR(network, eps=1e-8, max_num_iter=15, show_steps=False):
                 print("dx")
                 print(dx)
             for node in network.PQ_nodes:
-                node.theta += d_theta[node.index]
-                node.V += node.V * dV_over_V[node.index]
+                # if not converted to float, node.theta will be np.ndarray() with shape (1,),
+                # which doesn't affect calculation but repr
+                node.theta += float(d_theta[node.index])
+                node.V += float(node.V * dV_over_V[node.index])
                 network.update_node(node)
             for node in network.PV_nodes:
-                node.theta += d_theta[node.index]
+                node.theta += float(d_theta[node.index])
                 network.update_node(node)
             if show_steps:
                 print("-" * 10)
-                print("after num_iter: {}".format(num_iter))
+                print("after num_iter: {}".format(num_iter+1))
                 print("V")
                 print([node.V for node in network.all_nodes])
-                print("theta(degrees)")
+                print("theta(rad)")
+                print([node.theta for node in network.all_nodes])
+                print("theta(degree)")
                 print([node.theta * 180 / np.pi for node in network.all_nodes])
                 print("\n")
 

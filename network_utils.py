@@ -6,7 +6,8 @@ including simple functions not limited to Network Class
 
 def print_inductance_array(Y):
     '''
-    输出导纳矩阵的非零元素
+    print non-zero elements
+
     :param Y: inductance_array
     :return: None
     '''
@@ -19,37 +20,7 @@ def print_inductance_array(Y):
     print("\n")
 
 
-def form_inductance_array(branches):
-    '''
-    :param branches: a list branches. All bracnches,
-        including nodes and transformers
-    :return: inductance matrix if the first row and column of `Y` is stripped
-    '''
-    branch_index_i = [branch.i for branch in branches]
-    branch_index_j = [branch.j for branch in branches]
-    all_node_index = set(branch_index_i + branch_index_j)
-    node_num = len(all_node_index)
-
-    Y = np.zeros(dtype=np.complex, shape=(node_num + 1, node_num + 1))
-
-    for branch in branches:
-        # Y1 is connected to node i
-        # Y2 is connected to node j
-        # self.Z = R + 1j * X
-        # self.Y = 1 / self.Z
-        i = branch.i
-        j = branch.j
-
-        Y[i, i] += branch.Y1 + branch.Y
-        Y[j, j] += branch.Y2 + branch.Y
-
-        Y[i, j] += -branch.Y
-        Y[j, i] += -branch.Y
-    Y = Y[1:, 1:]
-    return Y
-
-
-def check_network(branches, nodes):
+def check_branches_and_nodes(branches, nodes):
     '''
 
     :param branches: a list branches. All bracnches,

@@ -1,11 +1,12 @@
 from network import Node, Line, Transformer, Network
-from network_utils import check_network, form_inductance_array, print_inductance_array
+from network_utils import check_branches_and_nodes, print_inductance_array
 from newton_raphson import NR
 
 # Step1, define network parameters(lines and transformers)
 # Here we use our example parameter set 2
-from examples_example_input import parameter_set1 as parameter_set
-nodes, lines, transformers = parameter_set
+from examples_example_input import parameter_set3 as parameter_set
+
+nodes, lines, transformers, extra_branches = parameter_set
 
 nodes = [Node.from_str(node.strip())
          for node in nodes.strip().split("\n")]
@@ -25,10 +26,9 @@ lines = [line for line in lines
 branches = transformers + lines  # Both are lists, simply added together
 
 # Step 2, check the parameters and form a network
-check_network(branches, nodes)
-Y = form_inductance_array(branches)
-print_inductance_array(Y)  # print non-zero elements
-network = Network(nodes, Y)
+check_branches_and_nodes(branches, nodes)
+network = Network(nodes, branches, extra_branches)
+print("Inductance Array after node re-index:\n{}\n".format(network.Y))
 
 # Step 3, calculate using N-R method
 # All initial values are passed by `network`,
@@ -36,11 +36,11 @@ network = Network(nodes, Y)
 eps = 1e-5  # epsilon
 max_num_iter = 15
 # To see iteration process, set `show_steps` to True, default: False
-network, num_iter = NR(network, eps, max_num_iter, show_steps=False)
+network, num_iter = NR(network, eps, max_num_iter, show_steps=True)
 if network is not None:  # if calculation diverges
     network_loss, (max_V_index, max_V), (min_V_index, min_V) = network.statistics()
     print("Network loss: {}".format(network_loss))
-    print("Node {} has maximum voltage of {}.".format(max_V_index,max_V))
-    print("Node {} has minimum voltage of {}.".format(min_V_index,min_V))
+    print("Node {} has maximum voltage of {}.".format(max_V_index, max_V))
+    print("Node {} has minimum voltage of {}.".format(min_V_index, min_V))
 
     network.visualize()
