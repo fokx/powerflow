@@ -1,13 +1,15 @@
 # powerflow
 
-A Power Flow Calculation Project,
- currently Newton-Raphson(N-R) Method and Fast Decoupled Power Flow(FDPF) Method implemented.
+An [Electric power Flow Calculation](https://en.wikipedia.org/wiki/Power-flow_study) program written in Python.
+
+Currently Newton-Raphson method and fast decoupled power flow(FDPF) method are supported.
+
 ## Some examples
 ```shell script
 $ python calculation_example1.py
 ```
 ### using example parameter set 1, visualized result
-(color temperature represents level of voltage.)
+(color temperature indicated level of voltage.)
 ![Voltage distribution](https://i.loli.net/2020/06/16/kbc6ACMY9iVvpGW.png)
 ### using example parameter set 2 with N-R method
 
@@ -171,7 +173,7 @@ Node 2 has maximum voltage of 1.05.
 Node 0 has minimum voltage of 0.9695014886383434.
 ```
 
-## comparison using example parameter set 1
+## Efficiency comparison using example parameter set 1
 ```shell script
  $ time python calculation_example1.py 
 ```
